@@ -21,6 +21,8 @@ using System.IO;
 using QuantConnect.Data;
 using System.Collections.Generic;
 using System.Globalization;
+using QuantConnect.Orders;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.DataSource
 {
@@ -28,27 +30,42 @@ namespace QuantConnect.DataSource
     /// Example custom data type
     /// </summary>
     [ProtoContract(SkipConstructor = true)]
-    public class MyCustomDataUniverseType : BaseData
+    public class QuiverLobbyingUniverse : BaseData
     {
         /// <summary>
-        /// Some custom data property
+        /// Date that the lobbying spend was reported
         /// </summary>
-        public string SomeCustomProperty { get; set; } 
+        public DateTime Date { get; set; }
 
         /// <summary>
-        /// Some custom data property
+        ///     Full name of the lobbying client
         /// </summary>
-        public decimal SomeNumericProperty { get; set; }
+        public string Client { get; set; }
+        
+        /// <summary>
+        ///     Category of legislation that is being lobbied for
+        /// </summary>
+        public string Issue { get; set; }
+        
+        /// <summary>
+        ///     Specific piece of legislation being lobbied for
+        /// </summary>
+        public string SpecificIssue { get; set; }
+
+        /// <summary>
+        /// The Size of spending instance (USD)
+        /// </summary>
+        public decimal? Amount { get; set; }
 
         /// <summary>
         /// Time passed between the date of the data and the time the data became available to us
         /// </summary>
-        public TimeSpan Period { get; set; } = TimeSpan.FromDays(1);
+        public TimeSpan _period = TimeSpan.FromDays(1);
 
         /// <summary>
         /// Time the data became available
         /// </summary>
-        public override DateTime EndTime => Time + Period;
+        public override DateTime EndTime => Time + _period;
 
         /// <summary>
         /// Return the URL string source of the file. This will be converted to a stream
@@ -63,7 +80,8 @@ namespace QuantConnect.DataSource
                 Path.Combine(
                     Globals.DataFolder,
                     "alternative",
-                    "mycustomdatatype",
+                    "quiver",
+                    "lobbying",
                     "universe",
                     $"{date.ToStringInvariant(DateFormat.EightCharacter)}.csv"
                 ),
@@ -83,15 +101,18 @@ namespace QuantConnect.DataSource
         {
             var csv = line.Split(','); 
 
-            var someNumericProperty = decimal.Parse(csv[2], NumberStyles.Any, CultureInfo.InvariantCulture); 
+            var amout = csv[6].IfNotNullOrEmpty<decimal?>(s => decimal.Parse(s, NumberStyles.Any, CultureInfo.InvariantCulture));
 
-            return new MyCustomDataUniverseType
+            return new QuiverLobbyingUniverse
             {
                 Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
-                SomeNumericProperty = someNumericProperty,
-                SomeCustomProperty = csv[3],
-                Time =  date - Period,
-                Value = someNumericProperty
+                Date = Parse.DateTimeExact(csv[2], "yyyyMMdd"),
+                Client = csv[3],
+                Issue = csv[4],
+                SpecificIssue = csv[5],
+                Amount = amout,
+                Time =  date - _period,
+                Value = amout ?? 0
             };
         }
 
@@ -110,7 +131,10 @@ namespace QuantConnect.DataSource
         /// </summary>
         public override string ToString()
         {
-            return $"{Symbol} - {Value}";
+            return Invariant($"{Symbol}({Date}) :: ") +
+                Invariant($"Lobbying Client: {Client} ") +
+                Invariant($"Lobbying Issue: {Issue} ") +
+                Invariant($"Lobbying Amount: {Amount}");
         }
 
         /// <summary>

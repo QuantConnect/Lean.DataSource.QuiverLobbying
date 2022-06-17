@@ -20,30 +20,61 @@ using ProtoBuf;
 using System.IO;
 using QuantConnect.Data;
 using System.Collections.Generic;
+using System.Globalization;
+using static QuantConnect.StringExtensions;
+using Microsoft.VisualBasic.FileIO;
+using QuantConnect.Util;
+using Newtonsoft.Json;
+
+
 
 namespace QuantConnect.DataSource
 {
     /// <summary>
     /// Example custom data type
     /// </summary>
-    [ProtoContract(SkipConstructor = true)]
-    public class MyCustomDataType : BaseData
+    public class QuiverLobbying : BaseData
     {
         /// <summary>
-        /// Some custom data property
+        /// Date that the lobbying spend was reported
         /// </summary>
-        [ProtoMember(2000)]
-        public string SomeCustomProperty { get; set; }
+        [JsonProperty(PropertyName = "Date")]
+        [JsonConverter(typeof(DateTimeJsonConverter), "yyyy-MM-dd")]
+        public DateTime Date { get; set; }
+
+        /// <summary>
+        ///     Full name of the lobbying client
+        /// </summary>
+        [JsonProperty(PropertyName = "Client")]
+        public string Client { get; set; }
+        
+        /// <summary>
+        ///     Category of legislation that is being lobbied for
+        /// </summary>
+        [JsonProperty(PropertyName = "Issue")]
+        public string Issue { get; set; }
+        
+        /// <summary>
+        ///     Specific piece of legislation being lobbied for
+        /// </summary>
+        [JsonProperty(PropertyName = "SpecificIssue")]
+        public string SpecificIssue { get; set; }
+
+        /// <summary>
+        /// The Size of spending instance (USD)
+        /// </summary>
+        [JsonProperty(PropertyName = "Amount")]
+        public decimal? Amount { get; set; }
 
         /// <summary>
         /// Time passed between the date of the data and the time the data became available to us
         /// </summary>
-        public TimeSpan Period { get; set; } = TimeSpan.FromDays(1);
+        public TimeSpan _period = TimeSpan.FromDays(1);
 
         /// <summary>
         /// Time the data became available
         /// </summary>
-        public override DateTime EndTime => Time + Period;
+        public override DateTime EndTime => Time + _period;
 
         /// <summary>
         /// Return the URL string source of the file. This will be converted to a stream
@@ -58,7 +89,8 @@ namespace QuantConnect.DataSource
                 Path.Combine(
                     Globals.DataFolder,
                     "alternative",
-                    "mycustomdatatype",
+                    "quiver",
+                    "lobbying",
                     $"{config.Symbol.Value.ToLowerInvariant()}.csv"
                 ),
                 SubscriptionTransportMedium.LocalFile
@@ -78,11 +110,15 @@ namespace QuantConnect.DataSource
             var csv = line.Split(',');
 
             var parsedDate = Parse.DateTimeExact(csv[0], "yyyyMMdd");
-            return new MyCustomDataType
+            return new QuiverLobbying
             {
                 Symbol = config.Symbol,
-                SomeCustomProperty = csv[1],
-                Time = parsedDate - Period,
+                Date = parsedDate,
+                Client = csv[1],
+                Issue = csv[2],
+                SpecificIssue = csv[3],
+                Amount = csv[4].IfNotNullOrEmpty<decimal?>(s => Parse.Decimal(s)),
+                Time = parsedDate - _period,
             };
         }
 
@@ -92,12 +128,16 @@ namespace QuantConnect.DataSource
         /// <returns>A clone of the object</returns>
         public override BaseData Clone()
         {
-            return new MyCustomDataType
+            return new QuiverLobbying
             {
                 Symbol = Symbol,
                 Time = Time,
                 EndTime = EndTime,
-                SomeCustomProperty = SomeCustomProperty,
+                Date = Date,
+                Client = Client,
+                Issue = Issue,
+                SpecificIssue = SpecificIssue,
+                Amount = Amount,
             };
         }
 
@@ -125,7 +165,10 @@ namespace QuantConnect.DataSource
         /// </summary>
         public override string ToString()
         {
-            return $"{Symbol} - {SomeCustomProperty}";
+            return Invariant($"{Symbol}({Date}) :: ") +
+                Invariant($"Lobbying Client: {Client} ") +
+                Invariant($"Lobbying Issue: {Issue} ") +
+                Invariant($"Lobbying Amount: {Amount}");
         }
 
         /// <summary>

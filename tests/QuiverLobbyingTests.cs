@@ -27,7 +27,7 @@ using QuantConnect.DataSource;
 namespace QuantConnect.DataLibrary.Tests
 {
     [TestFixture]
-    public class MyCustomDataTypeTests
+    public class QuiverLobbyingTests
     {
         [Test]
         public void JsonRoundTrip()
@@ -38,26 +38,6 @@ namespace QuantConnect.DataLibrary.Tests
             var result = JsonConvert.DeserializeObject(serialized, type);
 
             AssertAreEqual(expected, result);
-        }
-
-        [Test]
-        public void ProtobufRoundTrip()
-        {
-            var expected = CreateNewInstance();
-            var type = expected.GetType();
-
-            RuntimeTypeModel.Default[typeof(BaseData)].AddSubType(2000, type);
-
-            using (var stream = new MemoryStream())
-            {
-                Serializer.Serialize(stream, expected);
-
-                stream.Position = 0;
-
-                var result = Serializer.Deserialize(type, stream);
-
-                AssertAreEqual(expected, result, filterByCustomAttributes: true);
-            }
         }
 
         [Test]
@@ -87,12 +67,16 @@ namespace QuantConnect.DataLibrary.Tests
 
         private BaseData CreateNewInstance()
         {
-            return new MyCustomDataType
+            return new QuiverLobbying
             {
                 Symbol = Symbol.Empty,
                 Time = DateTime.Today,
+                Date = DateTime.Today,
                 DataType = MarketDataType.Base,
-                SomeCustomProperty = "This is some market related information"
+                Client = "client",
+                Issue = "issue",
+                SpecificIssue = "specific issue",
+                Amount = 0.43m
             };
         }
     }

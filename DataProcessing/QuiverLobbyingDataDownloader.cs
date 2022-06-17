@@ -36,12 +36,12 @@ using QuantConnect.Util;
 namespace QuantConnect.DataProcessing
 {
     /// <summary>
-    /// MyCustomDataDownloader implementation.
+    /// QuiverLobbyingDataDownloader implementation.
     /// </summary>
-    public class MyCustomDataDownloader : IDisposable
+    public class QuiverLobbyingDataDownloader : IDisposable
     {
-        public const string VendorName = "VendorName";
-        public const string VendorDataName = "VendorDataName";
+        public const string VendorName = "quiver";
+        public const string VendorDataName = "Lobbying";
         
         private readonly string _destinationFolder;
         private readonly string _universeFolder;
@@ -52,7 +52,10 @@ namespace QuantConnect.DataProcessing
         private static readonly List<char> _defunctDelimiters = new()
         {
             '-',
-            '_'
+            '_',
+            '$',
+            '(',
+            ')'
         };
         private ConcurrentDictionary<string, ConcurrentQueue<string>> _tempData = new();
         
@@ -67,15 +70,15 @@ namespace QuantConnect.DataProcessing
         private readonly RateGate _indexGate;
 
         /// <summary>
-        /// Creates a new instance of <see cref="MyCustomData"/>
+        /// Creates a new instance of <see cref="QuiverLobbying"/>
         /// </summary>
         /// <param name="destinationFolder">The folder where the data will be saved</param>
         /// <param name="apiKey">The Vendor API key</param>
-        public MyCustomDataDownloader(string destinationFolder, string apiKey = null)
+        public QuiverLobbyingDataDownloader(string destinationFolder, string apiKey = null)
         {
             _destinationFolder = Path.Combine(destinationFolder, VendorDataName);
             _universeFolder = Path.Combine(_destinationFolder, "universe");
-            _clientKey = apiKey ?? Config.Get("vendor-auth-token");
+            _clientKey = apiKey ?? Config.Get("quiver-auth-token");
             _canCreateUniverseFiles = Directory.Exists(Path.Combine(_dataFolder, "equity", "usa", "map_files"));
 
             // Represents rate limits of 10 requests per 1.1 second
@@ -94,9 +97,105 @@ namespace QuantConnect.DataProcessing
             var stopwatch = Stopwatch.StartNew();
             var today = DateTime.UtcNow.Date;
 
-            throw new NotImplementedException();
+            var mapFileProvider = new LocalZipMapFileProvider();
+            mapFileProvider.Initialize(new DefaultDataProvider());
+            var tasks = new List<Task>();
 
-            Log.Trace($"MyCustomDataDownloader.Run(): Finished in {stopwatch.Elapsed.ToStringInvariant(null)}");
+            try
+            {
+                Log.Trace($"QuiverLobbyingDataDownloader.Run(): Start downloading/processing QuiverQuant Lobbying data");
+
+                var companies = GetCompanies().Result.DistinctBy(x => x.Ticker).ToList();
+
+                _indexGate.WaitToProceed();
+
+                foreach (var company in companies)
+                {
+
+                    var quiverTicker = company.Ticker;
+                    string ticker;
+
+
+                    if (!TryNormalizeDefunctTicker(quiverTicker, out ticker))
+                    {
+                        Log.Error(
+                            $"QuiverLobbyingDataDownloader(): Defunct ticker {quiverTicker} is unable to be parsed. Continuing...");
+                        continue;
+                    }
+
+                    // Begin processing ticker with a normalized value
+                    Log.Trace($"QuiverLobbyingDataDownloader.Run(): Processing {ticker}");
+
+                    // Makes sure we don't overrun Quiver rate limits accidentally
+                    _indexGate.WaitToProceed();
+
+                    var sid = SecurityIdentifier.GenerateEquity(ticker, Market.USA, true, mapFileProvider, today);
+
+                    tasks.Add(HttpRequester($"historical/lobbying/{ticker}").ContinueWith( quiverLData => {
+                        if (quiverLData.IsFaulted)
+                            {
+                                Log.Error(
+                                    $"QuiverCNBCDataDownloader.Run(): Failed to get data for Lobbying");
+                                    return;
+                            }
+
+                        var result = quiverLData.Result;
+
+                        if (string.IsNullOrEmpty(result))
+                        {
+                            // We've already logged inside HttpRequester
+                            return;
+                        }
+
+                        var recentLobbies = JsonConvert.DeserializeObject<List<QuiverLobbying>>(result, _jsonSerializerSettings);
+                        var csvContents = new List<string>();
+
+                        Log.Trace($"dictionary created: {recentLobbies}");
+                                                 
+                            foreach (var lobby in recentLobbies) 
+                            {
+
+                                var date = $"{lobby.Date:yyyyMMdd}";
+
+                                var curRow = string.Join(",",
+                                    $"{lobby.Client}",
+                                    $"{lobby.Issue}",
+                                    $"{lobby.SpecificIssue}", 
+                                    $"{lobby.Amount}");
+
+                                csvContents.Add($"{date},{curRow}");
+
+                                 if (!_canCreateUniverseFiles)
+                                    continue;
+
+                                var queue = _tempData.GetOrAdd(date, new ConcurrentQueue<string>());
+                                queue.Enqueue($"{sid},{ticker},{curRow}");
+                            }
+
+                            if (csvContents.Count != 0)
+                            {
+                                SaveContentToFile(_destinationFolder, ticker, csvContents);
+                            }
+                    }));
+
+                    Task.WaitAll(tasks.ToArray());
+
+                    foreach (var kvp in _tempData)
+                        {
+                            SaveContentToFile(_universeFolder, kvp.Key, kvp.Value);
+                        }
+
+                        _tempData.Clear();
+                        tasks.Clear();
+                    }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e);
+                return false;
+            }
+
+            Log.Trace($"QuiverLobbyingDataDownloader.Run(): Finished in {stopwatch.Elapsed.ToStringInvariant(null)}");
             return true;
         }
 
@@ -114,7 +213,7 @@ namespace QuantConnect.DataProcessing
                 {
                     using (var client = new HttpClient())
                     {
-                        client.BaseAddress = new Uri("<base-api-endpoint>");
+                        client.BaseAddress = new Uri("https://api.quiverquant.com/beta/");
                         client.DefaultRequestHeaders.Clear();
 
                         // You must supply your API key in the HTTP header,
@@ -130,7 +229,7 @@ namespace QuantConnect.DataProcessing
                         var response = await client.GetAsync(Uri.EscapeUriString(url));
                         if (response.StatusCode == HttpStatusCode.NotFound)
                         {
-                            Log.Error($"MyCustomDataDownloader.HttpRequester(): Files not found at url: {Uri.EscapeUriString(url)}");
+                            Log.Error($"QuiverCNBCDataDownloader.HttpRequester(): Files not found at url: {Uri.EscapeUriString(url)}");
                             response.DisposeSafely();
                             return string.Empty;
                         }
@@ -151,7 +250,7 @@ namespace QuantConnect.DataProcessing
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, $"MyCustomDataDownloader.HttpRequester(): Error at HttpRequester. (retry {retries}/{_maxRetries})");
+                    Log.Error(e, $"QuiverCNBCDataDownloader.HttpRequester(): Error at HttpRequester. (retry {retries}/{_maxRetries})");
                     Thread.Sleep(1000);
                 }
             }
@@ -190,6 +289,39 @@ namespace QuantConnect.DataProcessing
             File.WriteAllLines(tempPath, finalLines);
             var tempFilePath = new FileInfo(tempPath);
             tempFilePath.MoveTo(finalPath, true);
+        }
+
+        /// <summary>
+        /// Gets the list of companies
+        /// </summary>
+        /// <returns>List of companies</returns>
+        /// <exception cref="Exception"></exception>
+        private async Task<List<Company>> GetCompanies()
+        {
+            try
+            {
+                var content = await HttpRequester("companies");
+                return JsonConvert.DeserializeObject<List<Company>>(content);
+            }
+            catch (Exception e)
+            {
+                throw new Exception("QuiverDownloader.GetSymbols(): Error parsing companies list", e);
+            }
+        }
+
+        private class Company
+        {
+            /// <summary>
+            /// The name of the company
+            /// </summary>
+            [JsonProperty(PropertyName = "Name")]
+            public string Name { get; set; }
+
+            /// <summary>
+            /// The ticker/symbol for the company
+            /// </summary>
+            [JsonProperty(PropertyName = "Ticker")]
+            public string Ticker { get; set; }
         }
 
         /// <summary>

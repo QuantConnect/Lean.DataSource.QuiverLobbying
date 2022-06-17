@@ -23,19 +23,19 @@ class CustomDataAlgorithm(QCAlgorithm):
         self.SetStartDate(2020, 10, 7)   #Set Start Date
         self.SetEndDate(2020, 10, 11)    #Set End Date
         self.equity_symbol = self.AddEquity("SPY", Resolution.Daily).Symbol
-        self.custom_data_symbol = self.AddData(MyCustomDataType, self.equity_symbol).Symbol
+        self.custom_data_symbol = self.AddData(QuiverLobbying, self.equity_symbol).Symbol
 
     def OnData(self, slice):
         ''' OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
 
         :param Slice slice: Slice object keyed by symbol containing the stock data
         '''
-        data = slice.Get(MyCustomDataType)
+        data = slice.Get(QuiverLobbying)
         if data:
             custom_data = data[self.custom_data_symbol]
-            if custom_data.SomeCustomProperty == "buy":
+            if custom_data.Amount >= 0.5:
                 self.SetHoldings(self.equitySymbol, 1)
-            elif custom_data.SomeCustomProperty == "sell":
+            elif custom_data.Amount <= 0.2:
                 self.SetHoldings(self.equitySymbol, -1)
 
     def OnOrderEvent(self, orderEvent):

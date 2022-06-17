@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <RootNamespace>QuantConnect.DataSource</RootNamespace>
-    <AssemblyName>QuantConnect.DataSource.MyCustonDataType</AssemblyName>
+    <AssemblyName>QuantConnect.DataSource.QuiverLobbying</AssemblyName>
     <OutputPath>bin\$(Configuration)</OutputPath>
-    <DocumentationFile>$(OutputPath)\QuantConnect.DataSource.MyCustonDataType.xml</DocumentationFile>
+    <DocumentationFile>$(OutputPath)\QuantConnect.DataSource.QuiverLobbying.xml</DocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,8 +20,10 @@
     <Compile Remove="DataProcessing\**" />
     <EmbeddedResource Remove="DataProcessing\**" />
     <None Remove="DataProcessing\**" />
-    <Compile Remove="Demonstration.cs" />
-    <Compile Remove="DemonstrationUniverse.cs" />
+    <Compile Remove="QuiverLobbyingAlgorithm.cs" />
+    <Compile Remove="QuiverLobbyingUniverseSelectionAlgorithm.cs" />
+    <None Remove="QuiverLobbyingAlgorithm.py" />
+    <None Remove="QuiverLobbyingUniverseSelectionAlgorithm.py" />
     <None Remove=".gitignore" />
   </ItemGroup>
 </Project>
