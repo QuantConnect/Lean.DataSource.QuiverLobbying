@@ -60,11 +60,7 @@ namespace QuantConnect.DataSource
         /// <summary>
         /// Time the data became available
         /// </summary>
-        [JsonProperty(PropertyName = "Date")]
-        [JsonConverter(typeof(DateTimeJsonConverter), "yyyy-MM-dd")]
-        public override DateTime EndTime { get; set; }
-
-        public DateTime Time => EndTime - _period;
+        public override DateTime EndTime => Time + _period;
 
         /// <summary>
         /// Return the URL string source of the file. This will be converted to a stream
@@ -103,7 +99,7 @@ namespace QuantConnect.DataSource
             return new QuiverLobbying
             {
                 Symbol = config.Symbol,
-                EndTime = parsedDate,
+                Time = parsedDate,
                 Client = csv[1],
                 Issue = csv[2],
                 SpecificIssue = csv[3],
@@ -120,7 +116,7 @@ namespace QuantConnect.DataSource
             return new QuiverLobbying
             {
                 Symbol = Symbol,
-                EndTime = EndTime,
+                Time = Time,
                 Client = Client,
                 Issue = Issue,
                 SpecificIssue = SpecificIssue,

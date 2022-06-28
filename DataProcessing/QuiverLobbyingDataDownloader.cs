@@ -140,12 +140,13 @@ namespace QuantConnect.DataProcessing
                             return;
                         }
 
-                        var recentLobbies = JsonConvert.DeserializeObject<List<QuiverLobbying>>(result, _jsonSerializerSettings);
+                        var recentLobbies = JsonConvert.DeserializeObject<List<RawLobbying>>(result, _jsonSerializerSettings);
                         var csvContents = new List<string>();
                                                  
                         foreach (var lobby in recentLobbies) 
                         {
-                            var dateTime = lobby.EndTime;
+                            // subtracting one day as the start time of the data. since the Date attribute in the JSON is the consolidated time of the data
+                            var dateTime = lobby.Date.AddDays(-1);
 
                             var date = $"{dateTime:yyyyMMdd}";
                             var issue = lobby.Issue == null ? null : lobby.Issue.Replace("\n", " ").Replace(",", " ").Trim();
@@ -314,6 +315,16 @@ namespace QuantConnect.DataProcessing
             /// </summary>
             [JsonProperty(PropertyName = "Ticker")]
             public string Ticker { get; set; }
+        }
+
+        private class RawLobbying : QuiverLobbying
+        {
+            /// <summary>
+            /// The date of the data being consolidated and received
+            /// </summary>
+            [JsonProperty(PropertyName = "Date")]
+            [JsonConverter(typeof(DateTimeJsonConverter), "yyyy-MM-dd")]
+            public DateTime Date { get; set; }
         }
 
         /// <summary>

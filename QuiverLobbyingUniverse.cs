@@ -100,7 +100,7 @@ namespace QuantConnect.DataSource
                 Amount = amout,
 
                 Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
-                Time = date.Date,
+                Time = date,
                 Value = amout ?? 0
             };
         }

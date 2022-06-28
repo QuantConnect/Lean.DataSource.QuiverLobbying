@@ -67,7 +67,7 @@ namespace QuantConnect.DataLibrary.Tests
             return new QuiverLobbying
             {
                 Symbol = Symbol.Empty,
-                EndTime = DateTime.Today,
+                Time = DateTime.Today,
                 DataType = MarketDataType.Base,
                 Client = "client",
                 Issue = "issue",
