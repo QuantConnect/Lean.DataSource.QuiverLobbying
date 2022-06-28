@@ -41,7 +41,7 @@ namespace QuantConnect.DataProcessing
     public class QuiverLobbyingDataDownloader : IDisposable
     {
         public const string VendorName = "quiver";
-        public const string VendorDataName = "Lobbying";
+        public const string VendorDataName = "lobbying";
         
         private readonly string _destinationFolder;
         private readonly string _universeFolder;
@@ -81,10 +81,8 @@ namespace QuantConnect.DataProcessing
             _clientKey = apiKey ?? Config.Get("quiver-auth-token");
             _canCreateUniverseFiles = Directory.Exists(Path.Combine(_dataFolder, "equity", "usa", "map_files"));
 
-            // Represents rate limits of 10 requests per 1.1 second
-            _indexGate = new RateGate(10, TimeSpan.FromSeconds(1.1));
+            _indexGate = new RateGate(100, TimeSpan.FromSeconds(60));
 
-            Directory.CreateDirectory(_destinationFolder);
             Directory.CreateDirectory(_universeFolder);
         }
 
@@ -111,10 +109,8 @@ namespace QuantConnect.DataProcessing
 
                 foreach (var company in companies)
                 {
-
                     var quiverTicker = company.Ticker;
                     string ticker;
-
 
                     if (!TryNormalizeDefunctTicker(quiverTicker, out ticker))
                     {
@@ -129,15 +125,12 @@ namespace QuantConnect.DataProcessing
                     // Makes sure we don't overrun Quiver rate limits accidentally
                     _indexGate.WaitToProceed();
 
-                    var sid = SecurityIdentifier.GenerateEquity(ticker, Market.USA, true, mapFileProvider, today);
-
                     tasks.Add(HttpRequester($"historical/lobbying/{ticker}").ContinueWith( quiverLData => {
                         if (quiverLData.IsFaulted)
-                            {
-                                Log.Error(
-                                    $"QuiverCNBCDataDownloader.Run(): Failed to get data for Lobbying");
-                                    return;
-                            }
+                        {
+                            Log.Error($"QuiverCNBCDataDownloader.Run(): Failed to get data for Lobbying");
+                            return;
+                        }
 
                         var result = quiverLData.Result;
 
@@ -149,45 +142,47 @@ namespace QuantConnect.DataProcessing
 
                         var recentLobbies = JsonConvert.DeserializeObject<List<QuiverLobbying>>(result, _jsonSerializerSettings);
                         var csvContents = new List<string>();
-
-                        Log.Trace($"dictionary created: {recentLobbies}");
                                                  
-                            foreach (var lobby in recentLobbies) 
+                        foreach (var lobby in recentLobbies) 
+                        {
+                            var dateTime = lobby.EndTime;
+
+                            var date = $"{dateTime:yyyyMMdd}";
+                            var issue = lobby.Issue == null ? null : lobby.Issue.Replace("\n", " ").Replace(",", " ").Trim();
+                            var specificIssue = lobby.SpecificIssue == null ? null : lobby.SpecificIssue.Replace("\n", " ").Replace(",", " ").Trim();
+
+                            var curRow = $"{lobby.Client},{issue},{specificIssue},{lobby.Amount}";
+                            csvContents.Add($"{date},{curRow}");
+
+                            if (!_canCreateUniverseFiles)
                             {
-
-                                var date = $"{lobby.Date:yyyyMMdd}";
-
-                                var curRow = string.Join(",",
-                                    $"{lobby.Client}",
-                                    $"{lobby.Issue}",
-                                    $"{lobby.SpecificIssue}", 
-                                    $"{lobby.Amount}");
-
-                                csvContents.Add($"{date},{curRow}");
-
-                                 if (!_canCreateUniverseFiles)
-                                    continue;
-
-                                var queue = _tempData.GetOrAdd(date, new ConcurrentQueue<string>());
-                                queue.Enqueue($"{sid},{ticker},{curRow}");
+                                continue;
                             }
 
-                            if (csvContents.Count != 0)
-                            {
-                                SaveContentToFile(_destinationFolder, ticker, csvContents);
-                            }
+                            var sid = SecurityIdentifier.GenerateEquity(ticker, Market.USA, true, mapFileProvider, dateTime);
+
+                            var queue = _tempData.GetOrAdd(date, new ConcurrentQueue<string>());
+                            queue.Enqueue($"{sid},{ticker},{curRow}");
+                        }
+
+                        if (csvContents.Count != 0)
+                        {
+                            SaveContentToFile(_destinationFolder, ticker, csvContents);
+                        }
                     }));
+
+                    if (tasks.Count != 10) continue;
 
                     Task.WaitAll(tasks.ToArray());
 
                     foreach (var kvp in _tempData)
-                        {
-                            SaveContentToFile(_universeFolder, kvp.Key, kvp.Value);
-                        }
-
-                        _tempData.Clear();
-                        tasks.Clear();
+                    {
+                        SaveContentToFile(_universeFolder, kvp.Key, kvp.Value);
                     }
+
+                    _tempData.Clear();
+                    tasks.Clear();
+                }
             }
             catch (Exception e)
             {
@@ -285,10 +280,7 @@ namespace QuantConnect.DataProcessing
                 .OrderBy(x => DateTime.ParseExact(x.Split(',').First(), "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal))
                 .ToList();
 
-            var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.tmp");
-            File.WriteAllLines(tempPath, finalLines);
-            var tempFilePath = new FileInfo(tempPath);
-            tempFilePath.MoveTo(finalPath, true);
+            File.WriteAllLines(finalPath, finalLines);
         }
 
         /// <summary>

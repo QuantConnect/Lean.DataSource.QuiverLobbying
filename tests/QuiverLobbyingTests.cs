@@ -15,10 +15,7 @@
 */
 
 using System;
-using ProtoBuf;
-using System.IO;
 using System.Linq;
-using ProtoBuf.Meta;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using QuantConnect.Data;
@@ -70,8 +67,7 @@ namespace QuantConnect.DataLibrary.Tests
             return new QuiverLobbying
             {
                 Symbol = Symbol.Empty,
-                Time = DateTime.Today,
-                Date = DateTime.Today,
+                EndTime = DateTime.Today,
                 DataType = MarketDataType.Base,
                 Client = "client",
                 Issue = "issue",

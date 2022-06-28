@@ -16,12 +16,10 @@
 
 using System;
 using NodaTime;
-using ProtoBuf;
 using System.IO;
 using QuantConnect.Data;
 using System.Collections.Generic;
 using System.Globalization;
-using QuantConnect.Orders;
 using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.DataSource
@@ -29,13 +27,9 @@ namespace QuantConnect.DataSource
     /// <summary>
     /// Example custom data type
     /// </summary>
-    [ProtoContract(SkipConstructor = true)]
     public class QuiverLobbyingUniverse : BaseData
     {
-        /// <summary>
-        /// Date that the lobbying spend was reported
-        /// </summary>
-        public DateTime Date { get; set; }
+        private static readonly TimeSpan _period = TimeSpan.FromDays(1);
 
         /// <summary>
         ///     Full name of the lobbying client
@@ -56,11 +50,6 @@ namespace QuantConnect.DataSource
         /// The Size of spending instance (USD)
         /// </summary>
         public decimal? Amount { get; set; }
-
-        /// <summary>
-        /// Time passed between the date of the data and the time the data became available to us
-        /// </summary>
-        public TimeSpan _period = TimeSpan.FromDays(1);
 
         /// <summary>
         /// Time the data became available
@@ -101,17 +90,17 @@ namespace QuantConnect.DataSource
         {
             var csv = line.Split(','); 
 
-            var amout = csv[6].IfNotNullOrEmpty<decimal?>(s => decimal.Parse(s, NumberStyles.Any, CultureInfo.InvariantCulture));
+            var amout = csv[5].IfNotNullOrEmpty<decimal?>(s => decimal.Parse(s, NumberStyles.Any, CultureInfo.InvariantCulture));
 
             return new QuiverLobbyingUniverse
             {
-                Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
-                Date = Parse.DateTimeExact(csv[2], "yyyyMMdd"),
-                Client = csv[3],
-                Issue = csv[4],
-                SpecificIssue = csv[5],
+                Client = csv[2],
+                Issue = csv[3],
+                SpecificIssue = csv[4],
                 Amount = amout,
-                Time =  date - _period,
+
+                Symbol = new Symbol(SecurityIdentifier.Parse(csv[0]), csv[1]),
+                Time = date.Date,
                 Value = amout ?? 0
             };
         }
@@ -131,7 +120,7 @@ namespace QuantConnect.DataSource
         /// </summary>
         public override string ToString()
         {
-            return Invariant($"{Symbol}({Date}) :: ") +
+            return Invariant($"{Symbol}({EndTime}) :: ") +
                 Invariant($"Lobbying Client: {Client} ") +
                 Invariant($"Lobbying Issue: {Issue} ") +
                 Invariant($"Lobbying Amount: {Amount}");

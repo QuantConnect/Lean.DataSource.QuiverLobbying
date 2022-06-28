@@ -22,7 +22,7 @@ class CustomDataAlgorithm(QCAlgorithm):
         
         self.SetStartDate(2020, 10, 7)   #Set Start Date
         self.SetEndDate(2020, 10, 11)    #Set End Date
-        self.equity_symbol = self.AddEquity("SPY", Resolution.Daily).Symbol
+        self.equity_symbol = self.AddEquity("AAPL", Resolution.Daily).Symbol
         self.custom_data_symbol = self.AddData(QuiverLobbying, self.equity_symbol).Symbol
 
     def OnData(self, slice):
@@ -33,10 +33,10 @@ class CustomDataAlgorithm(QCAlgorithm):
         data = slice.Get(QuiverLobbying)
         if data:
             custom_data = data[self.custom_data_symbol]
-            if custom_data.Amount >= 0.5:
+            if custom_data.Amount >= 50000:
                 self.SetHoldings(self.equitySymbol, 1)
-            elif custom_data.Amount <= 0.2:
-                self.SetHoldings(self.equitySymbol, -1)
+            elif custom_data.Amount <= 10000:
+                self.Liquidate(self.equitySymbol)
 
     def OnOrderEvent(self, orderEvent):
         ''' Order fill event handler. On an order fill update the resulting information is passed to this method.

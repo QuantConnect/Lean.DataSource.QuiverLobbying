@@ -15,18 +15,14 @@
 */
 
 using System;
-using NodaTime;
-using ProtoBuf;
-using System.IO;
-using QuantConnect.Data;
 using System.Collections.Generic;
+using System.IO;
 using System.Globalization;
-using static QuantConnect.StringExtensions;
-using Microsoft.VisualBasic.FileIO;
-using QuantConnect.Util;
 using Newtonsoft.Json;
-
-
+using NodaTime;
+using QuantConnect.Data;
+using QuantConnect.Util;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.DataSource
 {
@@ -35,15 +31,10 @@ namespace QuantConnect.DataSource
     /// </summary>
     public class QuiverLobbying : BaseData
     {
-        /// <summary>
-        /// Date that the lobbying spend was reported
-        /// </summary>
-        [JsonProperty(PropertyName = "Date")]
-        [JsonConverter(typeof(DateTimeJsonConverter), "yyyy-MM-dd")]
-        public DateTime Date { get; set; }
+        private static readonly TimeSpan _period = TimeSpan.FromDays(1);
 
         /// <summary>
-        ///     Full name of the lobbying client
+        /// Full name of the lobbying client
         /// </summary>
         [JsonProperty(PropertyName = "Client")]
         public string Client { get; set; }
@@ -67,14 +58,13 @@ namespace QuantConnect.DataSource
         public decimal? Amount { get; set; }
 
         /// <summary>
-        /// Time passed between the date of the data and the time the data became available to us
-        /// </summary>
-        public TimeSpan _period = TimeSpan.FromDays(1);
-
-        /// <summary>
         /// Time the data became available
         /// </summary>
-        public override DateTime EndTime => Time + _period;
+        [JsonProperty(PropertyName = "Date")]
+        [JsonConverter(typeof(DateTimeJsonConverter), "yyyy-MM-dd")]
+        public override DateTime EndTime { get; set; }
+
+        public DateTime Time => EndTime - _period;
 
         /// <summary>
         /// Return the URL string source of the file. This will be converted to a stream
@@ -113,12 +103,11 @@ namespace QuantConnect.DataSource
             return new QuiverLobbying
             {
                 Symbol = config.Symbol,
-                Date = parsedDate,
+                EndTime = parsedDate,
                 Client = csv[1],
                 Issue = csv[2],
                 SpecificIssue = csv[3],
-                Amount = csv[4].IfNotNullOrEmpty<decimal?>(s => Parse.Decimal(s)),
-                Time = parsedDate - _period,
+                Amount = csv[4].IfNotNullOrEmpty<decimal?>(s => decimal.Parse(s, NumberStyles.Any, CultureInfo.InvariantCulture))
             };
         }
 
@@ -131,9 +120,7 @@ namespace QuantConnect.DataSource
             return new QuiverLobbying
             {
                 Symbol = Symbol,
-                Time = Time,
                 EndTime = EndTime,
-                Date = Date,
                 Client = Client,
                 Issue = Issue,
                 SpecificIssue = SpecificIssue,
@@ -165,7 +152,7 @@ namespace QuantConnect.DataSource
         /// </summary>
         public override string ToString()
         {
-            return Invariant($"{Symbol}({Date}) :: ") +
+            return Invariant($"{Symbol}({EndTime}) :: ") +
                 Invariant($"Lobbying Client: {Client} ") +
                 Invariant($"Lobbying Issue: {Issue} ") +
                 Invariant($"Lobbying Amount: {Amount}");

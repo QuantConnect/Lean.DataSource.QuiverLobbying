@@ -35,9 +35,9 @@ namespace QuantConnect.DataLibrary.Tests
         /// </summary>
         public override void Initialize()
         {
-            SetStartDate(2013, 10, 07);  //Set Start Date
-            SetEndDate(2013, 10, 11);    //Set End Date
-            _equitySymbol = AddEquity("SPY").Symbol;
+            SetStartDate(2020, 10, 07);  //Set Start Date
+            SetEndDate(2020, 10, 11);    //Set End Date
+            _equitySymbol = AddEquity("AAPL").Symbol;
             _customDataSymbol = AddData<QuiverLobbying>(_equitySymbol).Symbol;
         }
 
@@ -52,11 +52,11 @@ namespace QuantConnect.DataLibrary.Tests
             {
                 var amount = data[_customDataSymbol].Amount;
                 // based on the custom data property we will buy or short the underlying equity
-                if (amount >= 0.5m)
+                if (amount >= 50000m)
                 {
                     SetHoldings(_equitySymbol, 1);
                 }
-                else if (amount <= 0.2m)
+                else if (amount <= 10000m)
                 {
                     Liquidate(_equitySymbol);
                 }
