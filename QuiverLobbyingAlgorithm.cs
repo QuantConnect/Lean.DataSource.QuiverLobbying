@@ -38,7 +38,7 @@ namespace QuantConnect.DataLibrary.Tests
             SetStartDate(2020, 10, 07);  //Set Start Date
             SetEndDate(2020, 10, 11);    //Set End Date
             _equitySymbol = AddEquity("AAPL").Symbol;
-            _customDataSymbol = AddData<QuiverLobbying>(_equitySymbol).Symbol;
+            _customDataSymbol = AddData<QuiverLobbyings>(_equitySymbol).Symbol;
         }
 
         /// <summary>
@@ -47,18 +47,25 @@ namespace QuantConnect.DataLibrary.Tests
         /// <param name="slice">Slice object keyed by symbol containing the stock data</param>
         public override void OnData(Slice slice)
         {
-            var data = slice.Get<QuiverLobbying>();
+            var data = slice.Get<QuiverLobbyings>();
             if (!data.IsNullOrEmpty())
             {
-                var amount = data[_customDataSymbol].Amount;
-                // based on the custom data property we will buy or short the underlying equity
-                if (amount >= 50000m)
+                foreach (var lobbyings in data.Values)
                 {
-                    SetHoldings(_equitySymbol, 1);
-                }
-                else if (amount <= 10000m)
-                {
-                    Liquidate(_equitySymbol);
+                    Log($"{Time} {lobbyings.ToString()}");
+                    foreach (QuiverLobbying lobbying in lobbyings)
+                    {
+                        var amount = lobbying.Amount;
+                        // based on the custom data property we will buy or short the underlying equity
+                        if (amount >= 5m)
+                        {
+                            SetHoldings(_equitySymbol, 1);
+                        }
+                        else if (amount <= 5m)
+                        {
+                            SetHoldings(_equitySymbol, -1);
+                        }
+                    }
                 }
             }
         }

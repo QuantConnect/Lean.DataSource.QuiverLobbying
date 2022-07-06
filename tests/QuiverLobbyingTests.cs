@@ -46,6 +46,15 @@ namespace QuantConnect.DataLibrary.Tests
             AssertAreEqual(expected, result);
         }
 
+        [Test]
+        public void CloneCollection()
+        {
+            var expected = CreateNewCollectionInstance();
+            var result = expected.Clone();
+
+            AssertAreEqual(expected, result);
+        }
+
         private void AssertAreEqual(object expected, object result, bool filterByCustomAttributes = false)
         {
             foreach (var propertyInfo in expected.GetType().GetProperties())
@@ -73,6 +82,33 @@ namespace QuantConnect.DataLibrary.Tests
                 Issue = "issue",
                 SpecificIssue = "specific issue",
                 Amount = 0.43m
+            };
+        }
+
+        private BaseData CreateNewCollectionInstance()
+        {
+            return new QuiverLobbyings
+            {
+                new QuiverLobbying
+                {
+                    Symbol = Symbol.Empty,
+                    Time = DateTime.Today,
+                    DataType = MarketDataType.Base,
+                    Client = "client",
+                    Issue = "issue",
+                    SpecificIssue = "specific issue",
+                    Amount = 0.43m
+                },
+                new QuiverLobbying
+                {
+                    Symbol = Symbol.Empty,
+                    Time = DateTime.Today,
+                    DataType = MarketDataType.Base,
+                    Client = "client",
+                    Issue = "issue",
+                    SpecificIssue = "specific issue",
+                    Amount = 0.43m
+                }
             };
         }
     }
