@@ -36,14 +36,16 @@ namespace QuantConnect.DataProcessing
             // automatically to the value set on the website when defining this data type
             var destinationDirectory = Path.Combine(
                 Config.Get("temp-output-directory", "/temp-output-directory"),
-                "alternative",
-                "quiver");
+                "alternative");
+            var processedDataDirectory = Path.Combine(
+                Config.Get("processed-data-directory", Globals.DataFolder),
+                "alternative");
 
             QuiverLobbyingDataDownloader instance = null;
             try
             {
                 // Pass in the values we got from the configuration into the downloader/converter.
-                instance = new QuiverLobbyingDataDownloader(destinationDirectory);
+                instance = new QuiverLobbyingDataDownloader(destinationDirectory, processedDataDirectory);
             }
             catch (Exception err)
             {

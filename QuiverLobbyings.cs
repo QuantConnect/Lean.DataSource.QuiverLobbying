@@ -16,49 +16,43 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using Newtonsoft.Json;
+using System.IO;
+using System.Linq;
 using NodaTime;
 using QuantConnect.Data;
-using static QuantConnect.StringExtensions;
+using QuantConnect.Data.UniverseSelection;
+using QuantConnect.Util;
 
 namespace QuantConnect.DataSource
 {
     /// <summary>
-    /// Quiver Lobbying data
+    /// Collection of Quiver Lobbying data
     /// </summary>
-    public class QuiverLobbying : BaseData
+    public class QuiverLobbyings : BaseDataCollection
     {
-        private static readonly TimeSpan _period = TimeSpan.FromDays(1);
+        private static readonly QuiverLobbying _factory = new();
 
         /// <summary>
-        /// Full name of the lobbying client
+        /// Return the URL string source of the file. This will be converted to a stream
         /// </summary>
-        [JsonProperty(PropertyName = "Client")]
-        public string Client { get; set; }
-        
-        /// <summary>
-        ///     Category of legislation that is being lobbied for
-        /// </summary>
-        [JsonProperty(PropertyName = "Issue")]
-        public string Issue { get; set; }
-        
-        /// <summary>
-        ///     Specific piece of legislation being lobbied for
-        /// </summary>
-        [JsonProperty(PropertyName = "SpecificIssue")]
-        public string SpecificIssue { get; set; }
-
-        /// <summary>
-        /// The Size of spending instance (USD)
-        /// </summary>
-        [JsonProperty(PropertyName = "Amount")]
-        public decimal? Amount { get; set; }
-
-        /// <summary>
-        /// Time the data became available
-        /// </summary>
-        public override DateTime EndTime => Time + _period;
+        /// <param name="config">Configuration object</param>
+        /// <param name="date">Date of this source file</param>
+        /// <param name="isLiveMode">true if we're in live mode, false for backtesting mode</param>
+        /// <returns>String URL of source file.</returns>
+        public override SubscriptionDataSource GetSource(SubscriptionDataConfig config, DateTime date, bool isLiveMode)
+        {
+            return new SubscriptionDataSource(
+                Path.Combine(
+                    Globals.DataFolder,
+                    "alternative",
+                    "quiver",
+                    "lobbying",
+                    $"{config.Symbol.Value.ToLowerInvariant()}.csv"
+                ),
+                SubscriptionTransportMedium.LocalFile,
+                FileFormat.UnfoldingCollection
+            );
+        }
 
         /// <summary>
         /// Parses the data from the line provided and loads it into LEAN
@@ -70,18 +64,7 @@ namespace QuantConnect.DataSource
         /// <returns>New instance</returns>
         public override BaseData Reader(SubscriptionDataConfig config, string line, DateTime date, bool isLiveMode)
         {
-            var csv = line.Split(',');
-
-            var parsedDate = Parse.DateTimeExact(csv[0], "yyyyMMdd");
-            return new QuiverLobbying
-            {
-                Symbol = config.Symbol,
-                Time = parsedDate,
-                Client = csv[1],
-                Issue = csv[2],
-                SpecificIssue = csv[3],
-                Amount = csv[4].IfNotNullOrEmpty<decimal?>(s => decimal.Parse(s, NumberStyles.Any, CultureInfo.InvariantCulture))
-            };
+            return _factory.Reader(config, line, date, isLiveMode);
         }
 
         /// <summary>
@@ -90,26 +73,12 @@ namespace QuantConnect.DataSource
         /// <returns>A clone of the object</returns>
         public override BaseData Clone()
         {
-            return new QuiverLobbying
+            return new QuiverLobbyings
             {
                 Symbol = Symbol,
                 Time = Time,
-                Client = Client,
-                Issue = Issue,
-                SpecificIssue = SpecificIssue,
-                Amount = Amount,
+                Data = Data?.ToList(point => point.Clone())
             };
-        }
-
-        /// <summary>
-        /// Converts the instance to string
-        /// </summary>
-        public override string ToString()
-        {
-            return Invariant($"{Symbol}({EndTime}) :: ") +
-                Invariant($"Lobbying Client: {Client} ") +
-                Invariant($"Lobbying Issue: {Issue} ") +
-                Invariant($"Lobbying Amount: {Amount}");
         }
 
         /// <summary>
@@ -118,7 +87,7 @@ namespace QuantConnect.DataSource
         /// <returns>false</returns>
         public override bool RequiresMapping()
         {
-            return true;
+            return _factory.RequiresMapping();
         }
 
         /// <summary>
@@ -128,15 +97,24 @@ namespace QuantConnect.DataSource
         /// <returns>true</returns>
         public override bool IsSparseData()
         {
-            return true;
+            return _factory.IsSparseData();
         }
 
+        /// <summary>
+        /// Formats a string with QuiverLobbying data
+        /// </summary>
+        /// <returns>string containing QuiverLobbying information</returns>
+        public override string ToString()
+        {
+            return $"[{string.Join(",", Data.Select(data => data.ToString()))}]";
+        }
+        
         /// <summary>
         /// Gets the default resolution for this data and security type
         /// </summary>
         public override Resolution DefaultResolution()
         {
-            return Resolution.Daily;
+            return _factory.DefaultResolution();
         }
 
         /// <summary>
@@ -144,7 +122,7 @@ namespace QuantConnect.DataSource
         /// </summary>
         public override List<Resolution> SupportedResolutions()
         {
-            return DailyResolution;
+            return _factory.SupportedResolutions();
         }
 
         /// <summary>
@@ -153,7 +131,7 @@ namespace QuantConnect.DataSource
         /// <returns>The <see cref="T:NodaTime.DateTimeZone" /> of this data type</returns>
         public override DateTimeZone DataTimeZone()
         {
-            return DateTimeZone.Utc;
+            return _factory.DataTimeZone();
         }
     }
 }
