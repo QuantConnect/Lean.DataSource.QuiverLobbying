@@ -132,7 +132,7 @@ namespace QuantConnect.DataProcessing
                     tasks.Add(HttpRequester($"historical/lobbying/{ticker}").ContinueWith( quiverLData => {
                         if (quiverLData.IsFaulted)
                         {
-                            Log.Error($"QuiverCNBCDataDownloader.Run(): Failed to get data for Lobbying");
+                            Log.Error($"QuiverLobbyingDataDownloader.Run(): Failed to get data for Lobbying");
                             return;
                         }
 
@@ -229,7 +229,7 @@ namespace QuantConnect.DataProcessing
                         var response = await client.GetAsync(Uri.EscapeUriString(url));
                         if (response.StatusCode == HttpStatusCode.NotFound)
                         {
-                            Log.Error($"QuiverCNBCDataDownloader.HttpRequester(): Files not found at url: {Uri.EscapeUriString(url)}");
+                            Log.Error($"QuiverLobbyingDataDownloader.HttpRequester(): Files not found at url: {Uri.EscapeUriString(url)}");
                             response.DisposeSafely();
                             return string.Empty;
                         }
@@ -250,7 +250,7 @@ namespace QuantConnect.DataProcessing
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, $"QuiverCNBCDataDownloader.HttpRequester(): Error at HttpRequester. (retry {retries}/{_maxRetries})");
+                    Log.Error(e, $"QuiverLobbyingDataDownloader.HttpRequester(): Error at HttpRequester. (retry {retries}/{_maxRetries})");
                     Thread.Sleep(1000);
                 }
             }
