@@ -50,15 +50,6 @@ namespace QuantConnect.DataProcessing
         private readonly string _dataFolder = Globals.DataFolder;
         private readonly bool _canCreateUniverseFiles;
         private readonly int _maxRetries = 5;
-        private static readonly List<char> _defunctDelimiters = new()
-        {
-            '-',
-            '_',
-            '$',
-            '(',
-            ')'
-        };
-        private ConcurrentDictionary<string, ConcurrentQueue<string>> _tempData = new();
         
         private readonly JsonSerializerSettings _jsonSerializerSettings = new()
         {
@@ -93,101 +84,73 @@ namespace QuantConnect.DataProcessing
         /// <summary>
         /// Runs the instance of the object.
         /// </summary>
+        /// <param name="processDate">date of data to be processed</param>
         /// <returns>True if process all downloads successfully</returns>
-        public bool Run()
+        public bool Run(DateTime processDate)
         {
             var stopwatch = Stopwatch.StartNew();
+            Log.Trace($"QuiverLobbyingDataDownloader.Run(): Start downloading/processing QuiverQuant Lobbying data");
+
             var today = DateTime.UtcNow.Date;
-
-            var mapFileProvider = new LocalZipMapFileProvider();
-            mapFileProvider.Initialize(new DefaultDataProvider());
-            var tasks = new List<Task>();
-
             try
             {
-                Log.Trace($"QuiverLobbyingDataDownloader.Run(): Start downloading/processing QuiverQuant Lobbying data");
-
-                var companies = GetCompanies().Result.DistinctBy(x => x.Ticker).ToList();
-
-                _indexGate.WaitToProceed();
-
-                foreach (var company in companies)
+                if (processDate >= today || processDate == DateTime.MinValue)
                 {
-                    var quiverTicker = company.Ticker;
-                    string ticker;
-
-                    if (!TryNormalizeDefunctTicker(quiverTicker, out ticker))
-                    {
-                        Log.Error(
-                            $"QuiverLobbyingDataDownloader(): Defunct ticker {quiverTicker} is unable to be parsed. Continuing...");
-                        continue;
-                    }
-
-                    // Begin processing ticker with a normalized value
-                    Log.Trace($"QuiverLobbyingDataDownloader.Run(): Processing {ticker}");
-
-                    // Makes sure we don't overrun Quiver rate limits accidentally
-                    _indexGate.WaitToProceed();
-
-                    tasks.Add(HttpRequester($"historical/lobbying/{ticker}").ContinueWith( quiverLData => {
-                        if (quiverLData.IsFaulted)
-                        {
-                            Log.Error($"QuiverLobbyingDataDownloader.Run(): Failed to get data for Lobbying");
-                            return;
-                        }
-
-                        var result = quiverLData.Result;
-
-                        if (string.IsNullOrEmpty(result))
-                        {
-                            // We've already logged inside HttpRequester
-                            return;
-                        }
-
-                        var recentLobbies = JsonConvert.DeserializeObject<List<RawLobbying>>(result, _jsonSerializerSettings);
-                        var csvContents = new List<string>();
-                                                 
-                        foreach (var lobby in recentLobbies) 
-                        {
-                            // subtracting one day as the start time of the data. since the Date attribute in the JSON is the consolidated time of the data
-                            var dateTime = lobby.Date.AddDays(-1);
-
-                            var date = $"{dateTime:yyyyMMdd}";
-                            var issue = lobby.Issue == null ? null : lobby.Issue.Replace("\n", " ").Replace(",", " ").Trim();
-                            var specificIssue = lobby.SpecificIssue == null ? null : lobby.SpecificIssue.Replace("\n", " ").Replace(",", " ").Trim();
-
-                            var curRow = $"{lobby.Client},{issue},{specificIssue},{lobby.Amount}";
-                            csvContents.Add($"{date},{curRow}");
-
-                            if (!_canCreateUniverseFiles)
-                            {
-                                continue;
-                            }
-
-                            var sid = SecurityIdentifier.GenerateEquity(ticker, Market.USA, true, mapFileProvider, dateTime);
-
-                            var queue = _tempData.GetOrAdd(date, new ConcurrentQueue<string>());
-                            queue.Enqueue($"{sid},{ticker},{curRow}");
-                        }
-
-                        if (csvContents.Count != 0)
-                        {
-                            SaveContentToFile(_destinationFolder, ticker, csvContents);
-                        }
-                    }));
-
-                    if (tasks.Count != 10) continue;
-
-                    Task.WaitAll(tasks.ToArray());
-
-                    foreach (var kvp in _tempData)
-                    {
-                        SaveContentToFile(_universeFolder, kvp.Key, kvp.Value);
-                    }
-
-                    _tempData.Clear();
-                    tasks.Clear();
+                    Log.Trace($"Encountered data from invalid date: {processDate:yyyy-MM-dd} - Skipping");
+                    return false;
                 }
+
+                var quiverLobbyingData = HttpRequester($"live/lobbying?date_from={processDate:yyyyMMdd}&date_to={processDate:yyyyMMdd}").SynchronouslyAwaitTaskResult();
+                if (string.IsNullOrWhiteSpace(quiverLobbyingData))
+                {
+                    // We've already logged inside HttpRequester
+                    return false;
+                }
+
+                var lobbyingByDate = JsonConvert.DeserializeObject<List<RawLobbying>>(quiverLobbyingData, _jsonSerializerSettings);
+
+                var recentLobbies = JsonConvert.DeserializeObject<List<RawLobbying>>(result, _jsonSerializerSettings);
+                var csvContents = new List<string>();
+                                            
+                var lobbyingByTicker = new Dictionary<string, List<string>>();
+                var universeCsvContents = new List<string>();
+
+                var mapFileProvider = new LocalZipMapFileProvider();
+                mapFileProvider.Initialize(new DefaultDataProvider());
+
+                foreach (var lobbying in lobbyingByDate)
+                {
+                    var ticker = lobbying.Ticker.ToUpperInvariant();
+
+                    if (!lobbyingByTicker.TryGetValue(ticker, out var _))
+                    {
+                        lobbyingByTicker.Add(ticker, new List<string>());
+                    }
+                    
+                    // subtracting one day as the start time of the data. since the Date attribute in the JSON is the consolidated time of the data
+                    var dateTime = lobby.Date.AddDays(-1);
+
+                    var date = $"{dateTime:yyyyMMdd}";
+                    var issue = lobby.Issue == null ? null : lobby.Issue.Replace("\n", " ").Replace(",", " ").Trim();
+                    var specificIssue = lobby.SpecificIssue == null ? null : lobby.SpecificIssue.Replace("\n", " ").Replace(",", " ").Trim();
+
+                    var curRow = $"{lobby.Client},{issue},{specificIssue},{lobby.Amount}";
+                    lobbyingByTicker[ticker].Add($"{date},{curRow}");
+
+                    var sid = SecurityIdentifier.GenerateEquity(ticker, Market.USA, true, mapFileProvider, date);
+                    universeCsvContents.Add($"{sid},{ticker},{curRow}");
+                }
+
+                if (!_canCreateUniverseFiles)
+                {
+                    return false;
+                }
+                else if (universeCsvContents.Any())
+                {
+                    SaveContentToFile(_universeFolder, $"{processDate:yyyyMMdd}", universeCsvContents);
+                }
+
+                lobbyingByTicker.DoForEach(kvp => SaveContentToFile(_destinationFolder, kvp.Key, kvp.Value));
             }
             catch (Exception e)
             {
@@ -299,39 +262,6 @@ namespace QuantConnect.DataProcessing
             File.WriteAllLines(finalPath, finalLines);
         }
 
-        /// <summary>
-        /// Gets the list of companies
-        /// </summary>
-        /// <returns>List of companies</returns>
-        /// <exception cref="Exception"></exception>
-        private async Task<List<Company>> GetCompanies()
-        {
-            try
-            {
-                var content = await HttpRequester("companies");
-                return JsonConvert.DeserializeObject<List<Company>>(content);
-            }
-            catch (Exception e)
-            {
-                throw new Exception("QuiverDownloader.GetSymbols(): Error parsing companies list", e);
-            }
-        }
-
-        private class Company
-        {
-            /// <summary>
-            /// The name of the company
-            /// </summary>
-            [JsonProperty(PropertyName = "Name")]
-            public string Name { get; set; }
-
-            /// <summary>
-            /// The ticker/symbol for the company
-            /// </summary>
-            [JsonProperty(PropertyName = "Ticker")]
-            public string Ticker { get; set; }
-        }
-
         private class RawLobbying : QuiverLobbying
         {
             /// <summary>
@@ -340,39 +270,12 @@ namespace QuantConnect.DataProcessing
             [JsonProperty(PropertyName = "Date")]
             [JsonConverter(typeof(DateTimeJsonConverter), "yyyy-MM-dd")]
             public DateTime Date { get; set; }
-        }
 
-        /// <summary>
-        /// Tries to normalize a potentially defunct ticker into a normal ticker.
-        /// </summary>
-        /// <param name="ticker">Ticker as received from Estimize</param>
-        /// <param name="nonDefunctTicker">Set as the non-defunct ticker</param>
-        /// <returns>true for success, false for failure</returns>
-        private static bool TryNormalizeDefunctTicker(string ticker, out string nonDefunctTicker)
-        {
-            // The "defunct" indicator can be in any capitalization/case
-            if (ticker.IndexOf("defunct", StringComparison.OrdinalIgnoreCase) > 0)
-            {
-                foreach (var delimChar in _defunctDelimiters)
-                {
-                    var length = ticker.IndexOf(delimChar);
-
-                    // Continue until we exhaust all delimiters
-                    if (length == -1)
-                    {
-                        continue;
-                    }
-
-                    nonDefunctTicker = ticker[..length].Trim();
-                    return true;
-                }
-
-                nonDefunctTicker = string.Empty;
-                return false;
-            }
-
-            nonDefunctTicker = ticker;
-            return true;
+            /// <summary>
+            /// The ticker/symbol for the company
+            /// </summary>
+            [JsonProperty(PropertyName = "Ticker")]
+            public string Ticker { get; set; }
         }
 
         /// <summary>
