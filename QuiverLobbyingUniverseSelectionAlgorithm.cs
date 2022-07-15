@@ -14,6 +14,7 @@
  *
 */
 
+using System.Collections.Generic;
 using System.Linq;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.DataSource;
@@ -40,15 +41,25 @@ namespace QuantConnect.Algorithm.CSharp
             // add a custom universe data source (defaults to usa-equity)
             AddUniverse<QuiverLobbyingUniverse>("QuiverLobbyingUniverse", Resolution.Daily, data =>
             {
+                var symbolData = new Dictionary<Symbol, List<QuiverLobbyingUniverse>>();
+
                 foreach (var datum in data)
                 {
-                    Log($"{datum.Symbol},{datum.Client},{datum.Amount},{datum.Issue}");
+                    var symbol = datum.Symbol;
+
+                    Log($"{symbol},{datum.Client},{datum.Amount},{datum.Issue}");
+
+                    if (!symbolData.ContainsKey(symbol))
+                    {
+                        symbolData.Add(symbol, new List<QuiverLobbyingUniverse>());
+                    }
+                    symbolData[symbol].Add(datum);
                 }
 
                 // define our selection criteria
-                return from d in data
-                       where d.Amount > 200000
-                       select d.Symbol;
+                return from kvp in symbolData
+                       where kvp.Value.Count >= 3 && kvp.Value.Sum(x => x.Amount) > 50000m
+                       select kvp.Key;
             });
         }
 

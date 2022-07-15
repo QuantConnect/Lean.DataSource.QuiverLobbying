@@ -36,11 +36,19 @@ class CustomDataUniverse(QCAlgorithm):
         :param List of MyCustomUniverseType data: List of MyCustomUniverseType
         :return: List of Symbol objects '''
 
+        symbol_data = {}
+
         for datum in data:
-            self.Log(f"{datum.Symbol},{datum.Client},{datum.Issue},{datum.SpecificIssue},{datum.Amount}")
+            symbol = datum.Symbol
+            self.Log(f"{symbol},{datum.Client},{datum.Issue},{datum.SpecificIssue},{datum.Amount}")
+            
+            if symbol not in symbol_data:
+                symbol_data[symbol] = []
+            symbol_data[symbol].append(datum)
         
         # define our selection criteria
-        return [d.Symbol for d in data if d.Amount >= 200000]
+        return [symbol for symbol, d in symbol_data.items()
+                if len(d) >= 3 and sum([x.Amount for x in d]) > 50000]
 
     def OnSecuritiesChanged(self, changes):
         ''' Event fired each time that we add/remove securities from the data feed

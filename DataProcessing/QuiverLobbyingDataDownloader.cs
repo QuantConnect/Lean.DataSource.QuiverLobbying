@@ -100,7 +100,7 @@ namespace QuantConnect.DataProcessing
                     return false;
                 }
 
-                var quiverLobbyingData = HttpRequester($"live/lobbying?date_from={processDate:yyyyMMdd}&date_to={processDate:yyyyMMdd}").SynchronouslyAwaitTaskResult();
+                var quiverLobbyingData = HttpRequester($"live/lobbying?date_from={processDate.AddDays(-1):yyyyMMdd}&date_to={processDate:yyyyMMdd}").SynchronouslyAwaitTaskResult();
                 if (string.IsNullOrWhiteSpace(quiverLobbyingData))
                 {
                     // We've already logged inside HttpRequester
@@ -108,9 +108,6 @@ namespace QuantConnect.DataProcessing
                 }
 
                 var lobbyingByDate = JsonConvert.DeserializeObject<List<RawLobbying>>(quiverLobbyingData, _jsonSerializerSettings);
-
-                var recentLobbies = JsonConvert.DeserializeObject<List<RawLobbying>>(result, _jsonSerializerSettings);
-                var csvContents = new List<string>();
                                             
                 var lobbyingByTicker = new Dictionary<string, List<string>>();
                 var universeCsvContents = new List<string>();
@@ -127,17 +124,18 @@ namespace QuantConnect.DataProcessing
                         lobbyingByTicker.Add(ticker, new List<string>());
                     }
                     
-                    // subtracting one day as the start time of the data. since the Date attribute in the JSON is the consolidated time of the data
-                    var dateTime = lobby.Date.AddDays(-1);
-
+                    // lobbying.Date == Time; processDate == EndTime
+                    var dateTime = lobbying.Date;
                     var date = $"{dateTime:yyyyMMdd}";
-                    var issue = lobby.Issue == null ? null : lobby.Issue.Replace("\n", " ").Replace(",", " ").Trim();
-                    var specificIssue = lobby.SpecificIssue == null ? null : lobby.SpecificIssue.Replace("\n", " ").Replace(",", " ").Trim();
 
-                    var curRow = $"{lobby.Client},{issue},{specificIssue},{lobby.Amount}";
+                    var client = lobbying.Client == null ? null : lobbying.Client.Replace("\n", " ").Replace(",", " ").Trim();
+                    var issue = lobbying.Issue == null ? null : lobbying.Issue.Replace("\n", " ").Replace(",", " ").Trim();
+                    var specificIssue = lobbying.SpecificIssue == null ? null : lobbying.SpecificIssue.Replace("\n", " ").Replace(",", " ").Trim();
+
+                    var curRow = $"{client},{issue},{specificIssue},{lobbying.Amount}";
                     lobbyingByTicker[ticker].Add($"{date},{curRow}");
 
-                    var sid = SecurityIdentifier.GenerateEquity(ticker, Market.USA, true, mapFileProvider, date);
+                    var sid = SecurityIdentifier.GenerateEquity(ticker, Market.USA, true, mapFileProvider, dateTime);
                     universeCsvContents.Add($"{sid},{ticker},{curRow}");
                 }
 
