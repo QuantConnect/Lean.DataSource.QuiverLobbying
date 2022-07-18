@@ -32,12 +32,10 @@ class CustomDataAlgorithm(QCAlgorithm):
         '''
         data = slice.Get(QuiverLobbyings)
         if data:
-            for lobbyings in data:
+            for lobbyings in data.values():
                 self.Log(f"{Time} {lobbyings.ToString()}")
 
                 for lobbying in lobbyings:
-                    lobbying = QuiverLobbying(lobbying)
-
                     if lobbying.Amount > 5:
                         self.SetHoldings(self.equity_symbol, 1)
                     elif lobbying.Amount < 5:
