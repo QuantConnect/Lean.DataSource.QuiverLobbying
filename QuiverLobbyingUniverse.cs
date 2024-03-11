@@ -21,13 +21,14 @@ using QuantConnect.Data;
 using System.Collections.Generic;
 using System.Globalization;
 using static QuantConnect.StringExtensions;
+using QuantConnect.Data.UniverseSelection;
 
 namespace QuantConnect.DataSource
 {
     /// <summary>
     /// Example custom data type
     /// </summary>
-    public class QuiverLobbyingUniverse : BaseData
+    public class QuiverLobbyingUniverse : BaseDataCollection
     {
         private static readonly TimeSpan _period = TimeSpan.FromDays(1);
 
@@ -74,7 +75,8 @@ namespace QuantConnect.DataSource
                     "universe",
                     $"{date.ToStringInvariant(DateFormat.EightCharacter)}.csv"
                 ),
-                SubscriptionTransportMedium.LocalFile
+                SubscriptionTransportMedium.LocalFile,
+                FileFormat.FoldingCollection
             );
         }
 
@@ -149,6 +151,25 @@ namespace QuantConnect.DataSource
         public override DateTimeZone DataTimeZone()
         {
             return DateTimeZone.Utc;
+        }
+
+        /// <summary>
+        /// Clones this instance
+        /// </summary>
+        public override BaseData Clone()
+        {
+            return new QuiverLobbyingUniverse
+            {
+                Symbol = Symbol,
+                Time = Time,
+                Value = Value,
+                Data = Data,
+
+                Client = Client,
+                Issue = Issue,
+                SpecificIssue = SpecificIssue,
+                Amount = Amount,
+            };
         }
     }
 }
