@@ -28,7 +28,15 @@ class CustomDataUniverse(QCAlgorithm):
         self.SetCash(100000)
 
         # add a custom universe data source (defaults to usa-equity)
-        self.AddUniverse(QuiverLobbyingUniverse, "QuiverLobbyingUniverse", Resolution.Daily, self.UniverseSelection)
+        universe = self.AddUniverse(QuiverLobbyingUniverse, self.UniverseSelection)
+
+        history = self.History(universe, TimeSpan(2, 0, 0, 0))
+        if len(history) != 2:
+            raise ValueError(f"Unexpected history count {len(history)}! Expected 1")
+
+        for dataForDate in history:
+            if len(dataForDate) < 1:
+                raise ValueError(f"Unexpected historical universe data!")
 
     def UniverseSelection(self, data):
         ''' Selected the securities
